@@ -1,25 +1,24 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-import requests
 import io
 import gdown
 
+# --- Descargar el archivo CSV desde Google Drive ---
 file_id = "1VKZPzoK0yFKW3vu0_9NAh2mWfyLVSeHf"
 url = f"https://drive.google.com/uc?id={file_id}"
-
 output = "archivo.csv"
 gdown.download(url, output, quiet=False)
 
-# Ahora leemos localmente
+# --- Leer el archivo descargado ---
 padrones_ret = pd.read_csv(output, sep=",", dtype=str)
-padrones_ret.head()
+padrones_ret["CUIT"] = padrones_ret["CUIT"].str.strip()
 
+# --- Streamlit app ---
 st.title("Consulta de Alícuota por CUIT")
 
-# 🔹 Consulta Individual
+# Consulta individual
 st.subheader("🔎 Consulta Individual")
-
 cuit_input = st.text_input("Ingresá un CUIT para consultar:")
 
 if st.button("Consultar"):
@@ -33,21 +32,20 @@ if st.button("Consultar"):
             st.dataframe(resultado)
 
             nombre_archivo = f"consulta_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            resultado.to_csv(nombre_archivo, index=False)
-            with open(nombre_archivo, "rb") as f:
-                st.download_button("📥 Descargar resultado", f, file_name=nombre_archivo)
+            csv_buffer = io.StringIO()
+            resultado.to_csv(csv_buffer, index=False)
+            st.download_button("📥 Descargar resultado", data=csv_buffer.getvalue(), file_name=nombre_archivo)
         else:
             st.error("CUIT no encontrado.")
 
-# 🔹 Consulta por archivo
+# Consulta por archivo
 st.markdown("---")
 st.subheader("📂 Consulta por Lote (archivo CSV)")
-
 archivo = st.file_uploader("Subí un archivo .csv con columna 'CUIT'", type=["csv"])
 
 if archivo is not None:
     try:
-        cuit_consulta = pd.read_csv(archivo, dtype=str)
+        cuit_consulta = pd.read_csv(archivo, dtype=str, sep=",")
         if "CUIT" not in cuit_consulta.columns:
             st.error("El archivo debe tener una columna llamada 'CUIT'.")
         else:
@@ -57,9 +55,8 @@ if archivo is not None:
             st.dataframe(resultado_lote)
 
             nombre_archivo_lote = f"resultado_lote_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            resultado_lote.to_csv(nombre_archivo_lote, index=False)
-
-            with open(nombre_archivo_lote, "rb") as f:
-                st.download_button("⬇️ Descargar archivo resultado", f, file_name=nombre_archivo_lote)
+            csv_buffer_lote = io.StringIO()
+            resultado_lote.to_csv(csv_buffer_lote, index=False)
+            st.download_button("⬇️ Descargar archivo resultado", data=csv_buffer_lote.getvalue(), file_name=nombre_archivo_lote)
     except Exception as e:
         st.error(f"Ocurrió un error al procesar el archivo: {e}")
