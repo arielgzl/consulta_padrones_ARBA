@@ -1,25 +1,19 @@
 import streamlit as st
 import pandas as pd
+from datetime import datetime
 import requests
 import io
-from datetime import datetime
+import gdown
 
-# 🔹 Cargar padrón desde Google Drive
-@st.cache_data
-def cargar_padron():
-    file_id = "1rU09B2rpMGaxujg7Y1B0aX-VGU8thXaA"
-    url = f"https://drive.google.com/uc?export=download&id={file_id}"
+file_id = "1VKZPzoK0yFKW3vu0_9NAh2mWfyLVSeHf"
+url = f"https://drive.google.com/uc?id={file_id}"
 
-    response = requests.get(url)
-    response.raise_for_status()
+output = "archivo.csv"
+gdown.download(url, output, quiet=False)
 
-    columnas = ["Fecha_Consulta", "Fecha_desde", "Fecha_hasta", "CUIT", "A0", "A1", "A2", "Alicuota", "A3", "A4"]
-    df = pd.read_csv(io.StringIO(response.text), sep=";", header=None, names=columnas, dtype=str)
-    df["CUIT"] = df["CUIT"].str.strip()
-    df["Alicuota"] = df["Alicuota"].str.strip()
-    return df[["CUIT", "Alicuota"]].drop_duplicates()
-
-padrones_ret = cargar_padron()
+# Ahora leemos localmente
+padrones_ret = pd.read_csv(output, sep=",", dtype=str)
+padrones_ret.head()
 
 st.title("Consulta de Alícuota por CUIT")
 
