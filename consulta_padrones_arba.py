@@ -1,62 +1,68 @@
-import streamlit as st
 import pandas as pd
-from datetime import datetime
-import io
 import gdown
 
-# --- Descargar el archivo CSV desde Google Drive ---
-file_id = "1VKZPzoK0yFKW3vu0_9NAh2mWfyLVSeHf"
+#drive = #https://drive.google.com/file/d/1rU09B2rpMGaxujg7Y1B0aX-VGU8thXaA/view?usp=sharing"
+
+file_id = "1rU09B2rpMGaxujg7Y1B0aX-VGU8thXaA"
+
 url = f"https://drive.google.com/uc?id={file_id}"
+
 output = "archivo.csv"
+
 gdown.download(url, output, quiet=False)
 
-# --- Leer el archivo descargado ---
-padrones_ret = pd.read_csv(output, sep=",", dtype=str)
-padrones_ret["CUIT"] = padrones_ret["CUIT"].str.strip()
+padron = pd.read_csv("archivo.csv", sep=";", encoding="latin1")
 
-# --- Streamlit app ---
-st.title("Consulta de Alícuota por CUIT")
+padron.columns = ["TIPO", "F_CONSULTA", "F_DESDE", "F_HASTA", "CUIT", "A0", "A1", "A2", "ALICUOTA", "A3", "A4"]
 
-# Consulta individual
-st.subheader("🔎 Consulta Individual")
-cuit_input = st.text_input("Ingresá un CUIT para consultar:")
+import streamlit as st
+from io import BytesIO
 
-if st.button("Consultar"):
-    cuit_input = cuit_input.strip()
-    if not cuit_input:
-        st.warning("Ingresá un CUIT válido.")
-    else:
-        resultado = padrones_ret[padrones_ret["CUIT"] == cuit_input]
-        if not resultado.empty:
-            st.success("Resultado encontrado:")
-            st.dataframe(resultado)
+# Función para filtrar por CUIT
+def buscar_cuits(padron, lista_cuits):
+    return padron[padron['CUIT'].isin(lista_cuits)]
 
-            nombre_archivo = f"consulta_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            csv_buffer = io.StringIO()
-            resultado.to_csv(csv_buffer, index=False)
-            st.download_button("📥 Descargar resultado", data=csv_buffer.getvalue(), file_name=nombre_archivo)
+# Función para generar archivo Excel
+def generar_excel(df):
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Resultado')
+    output.seek(0)
+    return output
+
+# Interfaz Streamlit
+st.title("Consulta de Alícuotas por CUIT")
+
+opcion = st.radio("¿Cómo querés consultar?", ["Individual", "Por lote (.txt)"])
+
+if opcion == "Individual":
+    cuit = st.text_input("Ingresá el CUIT (sin guiones ni puntos):")
+
+    if st.button("Consultar"):
+        if cuit.isnumeric() and len(cuit) == 11:
+            resultado = buscar_cuits(padron, [int(cuit)])
+            if not resultado.empty:
+                st.success("Resultado:")
+                st.dataframe(resultado[["CUIT", "ALICUOTA"]])
+            else:
+                st.warning("CUIT no encontrado en el padrón.")
         else:
-            st.error("CUIT no encontrado.")
+            st.error("El CUIT debe tener 11 dígitos numéricos.")
 
-# Consulta por archivo
-st.markdown("---")
-st.subheader("📂 Consulta por Lote (archivo CSV)")
-archivo = st.file_uploader("Subí un archivo .csv con columna 'CUIT'", type=["csv"])
+else:
+    archivo = st.file_uploader("Subí el archivo .txt con los CUITs (uno por línea)", type=["txt"])
 
-if archivo is not None:
-    try:
-        cuit_consulta = pd.read_csv(archivo, dtype=str, sep=",")
-        if "CUIT" not in cuit_consulta.columns:
-            st.error("El archivo debe tener una columna llamada 'CUIT'.")
+    if archivo is not None:
+        contenido = archivo.read().decode("utf-8")
+        lista_cuits = [int(line.strip()) for line in contenido.strip().splitlines() if line.strip().isdigit()]
+        
+        resultado_lote = buscar_cuits(padron, lista_cuits)
+
+        if not resultado_lote.empty:
+            st.success("Resultados encontrados:")
+            st.dataframe(resultado_lote[["CUIT", "ALICUOTA"]])
+            
+            excel_data = generar_excel(resultado_lote[["CUIT", "ALICUOTA"]])
+            st.download_button("📥 Descargar resultados en Excel", data=excel_data, file_name="resultado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         else:
-            cuit_consulta["CUIT"] = cuit_consulta["CUIT"].str.strip()
-            resultado_lote = pd.merge(cuit_consulta[["CUIT"]], padrones_ret, on="CUIT", how="left")
-            st.success("Consulta por lote realizada:")
-            st.dataframe(resultado_lote)
-
-            nombre_archivo_lote = f"resultado_lote_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            csv_buffer_lote = io.StringIO()
-            resultado_lote.to_csv(csv_buffer_lote, index=False)
-            st.download_button("⬇️ Descargar archivo resultado", data=csv_buffer_lote.getvalue(), file_name=nombre_archivo_lote)
-    except Exception as e:
-        st.error(f"Ocurrió un error al procesar el archivo: {e}")
+            st.warning("Ningún CUIT del archivo fue encontrado en el padrón.")
