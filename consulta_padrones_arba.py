@@ -13,7 +13,7 @@ url = f"https://drive.google.com/uc?id={file_id}"
 
 output = "retenciones_ARBA.csv"
 
-gdown.download(url, output, quiet=False)
+gdown.download(url, output, quiet=False, use_cookies=False)
 
 columns = ["TIPO", "F_CONSULTA", "F_DESDE", "F_HASTA", "CUIT", "A0", "A1", "A2", "ALICUOTA", "A3", "A4"]
 
@@ -30,7 +30,7 @@ url = f"https://drive.google.com/uc?id={file_id}"
 
 output = "percepciones_ARBA.csv"
 
-gdown.download(url, output, quiet=False)
+gdown.download(url, output, quiet=False, use_cookies=False)
 
 padron_percepciones = pd.read_csv("percepciones_ARBA.csv", sep=";", names = columns, encoding="latin1")
 padron_percepciones.head()
