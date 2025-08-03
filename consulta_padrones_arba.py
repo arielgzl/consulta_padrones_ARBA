@@ -53,7 +53,7 @@ def generar_excel(df):
 # padron_percepciones = pd.read_csv(...)
 
 # Interfaz Streamlit
-st.title("Consulta de Alícuotas por CUIT")
+st.title("Consulta de Alícuotas por CUIT ARBA")
 
 # Elegir base de datos
 tipo_padron = st.selectbox("Seleccioná el padrón a consultar:", ["Retenciones", "Percepciones"])
