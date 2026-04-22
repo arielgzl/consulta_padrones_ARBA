@@ -5,9 +5,9 @@ from io import BytesIO
 
 #RETENCIONES
 
-#drive = #https://drive.google.com/file/d/1qw4c3l4X8_TrBFy4gxCzRmAxULB7edWv/view?usp=drive_link
+#drive = #https://drive.google.com/file/d/1He_ve8_nnxtHfUsMcodQby29i1VB1rFz/view?usp=drive_link
 
-file_id = "1qw4c3l4X8_TrBFy4gxCzRmAxULB7edWv"
+file_id = "1He_ve8_nnxtHfUsMcodQby29i1VB1rFz"
 
 url = f"https://drive.google.com/uc?id={file_id}"
 
@@ -22,9 +22,9 @@ padron_retenciones.head()
 
 #PERCEPCIONES
 
-#drive = #https://drive.google.com/file/d/1gIXBcmmz5ep4X1BwZ0WJmadHr8CWAakt/view?usp=drive_link
+#drive = #https://drive.google.com/file/d/1ivL1AMT4q79uWTVM5OBOrCMq-OVowQhj/view?usp=drive_link
 
-file_id = "1gIXBcmmz5ep4X1BwZ0WJmadHr8CWAakt"
+file_id = "1ivL1AMT4q79uWTVM5OBOrCMq-OVowQhj"
 
 url = f"https://drive.google.com/uc?id={file_id}"
 
