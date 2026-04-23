@@ -4,3 +4,4 @@ requests
 gdown
 xlsxwriter
 huggingface_hub
+dropbox
