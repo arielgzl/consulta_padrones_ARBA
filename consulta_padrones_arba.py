@@ -1,134 +1,104 @@
 import pandas as pd
+import gdown
 import streamlit as st
-import requests
 from io import BytesIO
 import os
 
-# -------------------------------
-# DESCARGA ROBUSTA DESDE DRIVE
-# -------------------------------
-def download_drive_file(file_id, output):
-    if os.path.exists(output):
-        return
+# ─── Configuración ────────────────────────────────────────────────────────────
+st.set_page_config(page_title="Consulta ARBA", page_icon="🔍", layout="centered")
 
-    URL = "https://drive.google.com/uc?export=download"
-    session = requests.Session()
+ARCHIVOS = {
+    "Retenciones":  {"id": "1He_ve8_nnxtHfUsMcodQby29i1VB1rFz", "local": "retenciones_ARBA.csv"},
+    "Percepciones": {"id": "1ivL1AMT4q79uWTVM5OBOrCMq-OVowQhj", "local": "percepciones_ARBA.csv"},
+}
 
-    response = session.get(URL, params={'id': file_id}, stream=True)
+COLUMNS = ["TIPO", "F_CONSULTA", "F_DESDE", "F_HASTA", "CUIT", "A0", "A1", "A2", "ALICUOTA", "A3", "A4"]
 
-    # manejar confirmación de Google (archivos grandes)
-    for key, value in response.cookies.items():
-        if key.startswith('download_warning'):
-            response = session.get(URL, params={'id': file_id, 'confirm': value}, stream=True)
-            break
+# ─── Carga con caché (clave para archivos de 200 MB) ─────────────────────────
+@st.cache_data(show_spinner="Descargando y cargando padrón...")
+def cargar_padron(nombre: str) -> pd.DataFrame:
+    cfg = ARCHIVOS[nombre]
+    if not os.path.exists(cfg["local"]):
+        gdown.download(id=cfg["id"], output=cfg["local"], quiet=False)
 
-    with open(output, "wb") as f:
-        for chunk in response.iter_content(32768):
-            if chunk:
-                f.write(chunk)
-
-# -------------------------------
-# CARGA CON CACHE
-# -------------------------------
-@st.cache_data
-def cargar_padron(file_id, filename):
-    download_drive_file(file_id, filename)
-
-    columns = ["TIPO", "F_CONSULTA", "F_DESDE", "F_HASTA", "CUIT", "A0", "A1", "A2", "ALICUOTA", "A3", "A4"]
-
-    df = pd.read_csv(filename, sep=";", names=columns, encoding="latin1", header=None)
-
-    # 🔥 CLAVE: normalizar CUIT
-    df = df[["CUIT", "ALICUOTA"]]
-    df["CUIT"] = df["CUIT"].astype(str).str.strip()
-
+    df = pd.read_csv(
+        cfg["local"],
+        sep=";",
+        names=COLUMNS,
+        encoding="latin1",
+        dtype={"CUIT": str},   # ← FIX: CUIT siempre como string
+    )
+    # Limpiar espacios/caracteres ocultos en CUIT
+    df["CUIT"] = df["CUIT"].str.strip()
     return df
 
-# -------------------------------
-# CARGA PADRONES
-# -------------------------------
-padron_retenciones = cargar_padron(
-    "1He_ve8_nnxtHfUsMcodQby29i1VB1rFz",
-    "retenciones.csv"
-)
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+def normalizar_cuit(cuit: str) -> str:
+    """Elimina guiones, puntos y espacios."""
+    return cuit.replace("-", "").replace(".", "").strip()
 
-padron_percepciones = cargar_padron(
-    "1ivL1AMT4q79uWTVM5OBOrCMq-OVowQhj",
-    "percepciones.csv"
-)
+def buscar_cuits(df: pd.DataFrame, lista_cuits: list[str]) -> pd.DataFrame:
+    return df[df["CUIT"].isin(lista_cuits)]
 
-# -------------------------------
-# FUNCIONES
-# -------------------------------
-def buscar_cuits(padron, lista_cuits):
-    lista_cuits = [str(c).strip() for c in lista_cuits]
-    return padron[padron['CUIT'].isin(lista_cuits)]
+def generar_excel(df: pd.DataFrame) -> BytesIO:
+    buf = BytesIO()
+    with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
+        df.to_excel(writer, index=False, sheet_name="Resultado")
+    buf.seek(0)
+    return buf
 
-def generar_excel(df):
-    output = BytesIO()
-    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False)
-    output.seek(0)
-    return output
+# ─── UI ───────────────────────────────────────────────────────────────────────
+st.title("🔍 Consulta de Alícuotas ARBA")
 
-# -------------------------------
-# UI
-# -------------------------------
-st.title("Consulta de Alícuotas por CUIT ARBA")
+tipo_padron = st.selectbox("Padrón a consultar:", list(ARCHIVOS.keys()))
+padron = cargar_padron(tipo_padron)
 
-tipo_padron = st.selectbox(
-    "Seleccioná el padrón:",
-    ["Retenciones", "Percepciones"]
-)
-
-padron = padron_retenciones if tipo_padron == "Retenciones" else padron_percepciones
+st.caption(f"Padrón cargado: **{len(padron):,} registros**")
 
 opcion = st.radio("Modo de consulta:", ["Individual", "Por lote (.txt)"])
 
-# -------------------------------
-# INDIVIDUAL
-# -------------------------------
+COLS_MOSTRAR = ["CUIT", "ALICUOTA", "F_DESDE", "F_HASTA"]
+
+# ── Consulta individual ───────────────────────────────────────────────────────
 if opcion == "Individual":
-    cuit = st.text_input("CUIT (11 dígitos)").strip()
+    cuit_input = st.text_input("CUIT (con o sin guiones):", placeholder="20-12345678-9")
 
-    if st.button("Consultar"):
-        if cuit.isdigit() and len(cuit) == 11:
-            resultado = buscar_cuits(padron, [int(cuit)])
-
+    if st.button("Consultar", type="primary"):
+        cuit_norm = normalizar_cuit(cuit_input)
+        if len(cuit_norm) == 11 and cuit_norm.isnumeric():
+            resultado = buscar_cuits(padron, [cuit_norm])
             if not resultado.empty:
-                st.success("Resultado:")
-                st.dataframe(resultado)
+                st.success(f"✅ CUIT encontrado — alícuota: **{resultado['ALICUOTA'].iloc[0]}**")
+                st.dataframe(resultado[COLS_MOSTRAR], use_container_width=True)
             else:
-                st.warning("CUIT no encontrado")
+                st.warning("⚠️ CUIT no encontrado en el padrón.")
         else:
-            st.error("CUIT inválido")
+            st.error("El CUIT debe tener 11 dígitos numéricos.")
 
-# -------------------------------
-# LOTE
-# -------------------------------
+# ── Consulta por lote ─────────────────────────────────────────────────────────
 else:
-    archivo = st.file_uploader("Subí archivo .txt (un CUIT por línea)", type=["txt"])
+    archivo = st.file_uploader("Archivo .txt con CUITs (uno por línea):", type=["txt"])
 
     if archivo:
         contenido = archivo.read().decode("utf-8")
+        lista_raw = [normalizar_cuit(l) for l in contenido.splitlines() if l.strip()]
+        lista_validos = [c for c in lista_raw if len(c) == 11 and c.isnumeric()]
+        invalidos = len(lista_raw) - len(lista_validos)
 
-        lista_cuits = [
-            line.strip()
-            for line in contenido.splitlines()
-            if line.strip().isdigit()
-        ]
+        st.info(f"CUITs leídos: **{len(lista_validos)}** válidos" +
+                (f", {invalidos} ignorados por formato incorrecto." if invalidos else "."))
 
-        resultado = buscar_cuits(padron, lista_cuits)
+        resultado_lote = buscar_cuits(padron, lista_validos)
 
-        if not resultado.empty:
-            st.success("Resultados:")
-            st.dataframe(resultado)
+        if not resultado_lote.empty:
+            st.success(f"✅ {len(resultado_lote)} registros encontrados de {len(lista_validos)} consultados.")
+            st.dataframe(resultado_lote[COLS_MOSTRAR], use_container_width=True)
 
-            excel = generar_excel(resultado)
             st.download_button(
                 "📥 Descargar Excel",
-                data=excel,
-                file_name="resultado.xlsx"
+                data=generar_excel(resultado_lote[COLS_MOSTRAR]),
+                file_name=f"resultado_{tipo_padron.lower()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
             )
         else:
-            st.warning("Ningún CUIT encontrado")
+            st.warning("⚠️ Ningún CUIT fue encontrado en el padrón.")
