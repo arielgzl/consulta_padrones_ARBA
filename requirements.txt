@@ -3,3 +3,4 @@ pandas
 requests
 gdown
 xlsxwriter
+huggingface_hub
