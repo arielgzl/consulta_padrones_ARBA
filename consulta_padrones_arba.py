@@ -7,8 +7,8 @@ from io import BytesIO
 st.set_page_config(page_title="Consulta ARBA", page_icon="🔍", layout="centered")
 
 ARCHIVOS = {
-    "Retenciones":  {"filename": "retenciones_ARBA.csv"},
-    "Percepciones": {"filename": "percepciones_ARBA.csv"},
+    "Retenciones":  {"filename": "PadronRGSRet042026.TXT"},
+    "Percepciones": {"filename": "PadronRGSPer042026.TXT"},
 }
 
 COLUMNS = ["TIPO", "F_CONSULTA", "F_DESDE", "F_HASTA", "CUIT", "A0", "A1", "A2", "ALICUOTA", "A3", "A4"]
