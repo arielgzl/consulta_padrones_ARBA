@@ -16,7 +16,7 @@ try:
     COLUMNS = ["TIPO", "F_CONSULTA", "F_DESDE", "F_HASTA", "CUIT", "A0", "A1", "A2", "ALICUOTA", "A3", "A4"]
     COLS_MOSTRAR = ["CUIT", "ALICUOTA", "F_DESDE", "F_HASTA"]
 
-    HF_REPO = "arielgonzalez/padrones_arba"  # ← reemplazá con tu usuario y repo
+    HF_REPO = "arielgonzalez/padrones_arba"
 
     @st.cache_data(show_spinner="Descargando padrón desde Hugging Face...")
     def cargar_padron(nombre: str) -> pd.DataFrame:
@@ -54,15 +54,16 @@ try:
     tipo_padron = st.selectbox("Padrón a consultar:", list(ARCHIVOS.keys()))
 
     if st.button("Cargar padrón", type="primary"):
-    padron = cargar_padron(tipo_padron)
-    st.session_state["padron"] = padron
-    st.session_state["tipo_cargado"] = tipo_padron
+        padron = cargar_padron(tipo_padron)
+        st.session_state["padron"] = padron
+        st.session_state["tipo_cargado"] = tipo_padron
 
     if "padron" not in st.session_state:
-    st.info("Seleccioná el padrón y presioná **Cargar padrón**.")
-    st.stop()
-    padron = cargar_padron(tipo_padron)
-    st.caption(f"Padrón cargado: **{len(padron):,} registros**")
+        st.info("Seleccioná el padrón y presioná **Cargar padrón**.")
+        st.stop()
+
+    padron = st.session_state["padron"]
+    st.caption(f"Padrón cargado: **{len(padron):,} registros** ({st.session_state['tipo_cargado']})")
 
     opcion = st.radio("Modo de consulta:", ["Individual", "Por lote (.txt)"])
 
