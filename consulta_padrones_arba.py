@@ -93,7 +93,7 @@ if opcion == "Individual":
 
     if st.button("Consultar"):
         if cuit.isdigit() and len(cuit) == 11:
-            resultado = buscar_cuits(padron, [cuit])
+            resultado = buscar_cuits(padron, [int(cuit)])
 
             if not resultado.empty:
                 st.success("Resultado:")
