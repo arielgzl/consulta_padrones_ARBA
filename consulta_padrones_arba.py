@@ -53,6 +53,14 @@ try:
 
     tipo_padron = st.selectbox("Padrón a consultar:", list(ARCHIVOS.keys()))
 
+    if st.button("Cargar padrón", type="primary"):
+    padron = cargar_padron(tipo_padron)
+    st.session_state["padron"] = padron
+    st.session_state["tipo_cargado"] = tipo_padron
+
+    if "padron" not in st.session_state:
+    st.info("Seleccioná el padrón y presioná **Cargar padrón**.")
+    st.stop()
     padron = cargar_padron(tipo_padron)
     st.caption(f"Padrón cargado: **{len(padron):,} registros**")
 
