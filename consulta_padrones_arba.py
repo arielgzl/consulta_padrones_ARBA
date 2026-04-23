@@ -1,43 +1,45 @@
 import pandas as pd
-import gdown
 import streamlit as st
+from huggingface_hub import hf_hub_download
 from io import BytesIO
-import os
 
 # ─── Configuración ────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Consulta ARBA", page_icon="🔍", layout="centered")
 
 ARCHIVOS = {
-    "Retenciones":  {"id": "1He_ve8_nnxtHfUsMcodQby29i1VB1rFz", "local": "retenciones_ARBA.csv"},
-    "Percepciones": {"id": "1ivL1AMT4q79uWTVM5OBOrCMq-OVowQhj", "local": "percepciones_ARBA.csv"},
+    "Retenciones":  {"filename": "retenciones_ARBA.csv"},
+    "Percepciones": {"filename": "percepciones_ARBA.csv"},
 }
 
 COLUMNS = ["TIPO", "F_CONSULTA", "F_DESDE", "F_HASTA", "CUIT", "A0", "A1", "A2", "ALICUOTA", "A3", "A4"]
+COLS_MOSTRAR = ["CUIT", "ALICUOTA", "F_DESDE", "F_HASTA"]
 
-# ─── Carga con caché (clave para archivos de 200 MB) ─────────────────────────
-@st.cache_data(show_spinner="Descargando y cargando padrón...")
+HF_REPO = "arielgonzalez/padrones_arba"  # ← reemplazá con tu usuario y nombre de repo
+
+# ─── Carga con caché ──────────────────────────────────────────────────────────
+@st.cache_data(show_spinner="Descargando padrón desde Hugging Face...")
 def cargar_padron(nombre: str) -> pd.DataFrame:
-    cfg = ARCHIVOS[nombre]
-    if not os.path.exists(cfg["local"]):
-        gdown.download(id=cfg["id"], output=cfg["local"], quiet=False)
-
+    ruta_local = hf_hub_download(
+        repo_id=HF_REPO,
+        filename=ARCHIVOS[nombre]["filename"],
+        repo_type="dataset",
+        token=st.secrets["HF_TOKEN"],
+    )
     df = pd.read_csv(
-        cfg["local"],
+        ruta_local,
         sep=";",
         names=COLUMNS,
         encoding="latin1",
-        dtype={"CUIT": str},   # ← FIX: CUIT siempre como string
+        dtype={"CUIT": str},
     )
-    # Limpiar espacios/caracteres ocultos en CUIT
     df["CUIT"] = df["CUIT"].str.strip()
     return df
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 def normalizar_cuit(cuit: str) -> str:
-    """Elimina guiones, puntos y espacios."""
     return cuit.replace("-", "").replace(".", "").strip()
 
-def buscar_cuits(df: pd.DataFrame, lista_cuits: list[str]) -> pd.DataFrame:
+def buscar_cuits(df: pd.DataFrame, lista_cuits: list) -> pd.DataFrame:
     return df[df["CUIT"].isin(lista_cuits)]
 
 def generar_excel(df: pd.DataFrame) -> BytesIO:
@@ -51,13 +53,15 @@ def generar_excel(df: pd.DataFrame) -> BytesIO:
 st.title("🔍 Consulta de Alícuotas ARBA")
 
 tipo_padron = st.selectbox("Padrón a consultar:", list(ARCHIVOS.keys()))
-padron = cargar_padron(tipo_padron)
 
-st.caption(f"Padrón cargado: **{len(padron):,} registros**")
+try:
+    padron = cargar_padron(tipo_padron)
+    st.caption(f"Padrón cargado: **{len(padron):,} registros**")
+except Exception as e:
+    st.error("❌ No se pudo cargar el padrón. Verificá el token y el nombre del repositorio.")
+    st.stop()
 
 opcion = st.radio("Modo de consulta:", ["Individual", "Por lote (.txt)"])
-
-COLS_MOSTRAR = ["CUIT", "ALICUOTA", "F_DESDE", "F_HASTA"]
 
 # ── Consulta individual ───────────────────────────────────────────────────────
 if opcion == "Individual":
@@ -85,15 +89,16 @@ else:
         lista_validos = [c for c in lista_raw if len(c) == 11 and c.isnumeric()]
         invalidos = len(lista_raw) - len(lista_validos)
 
-        st.info(f"CUITs leídos: **{len(lista_validos)}** válidos" +
-                (f", {invalidos} ignorados por formato incorrecto." if invalidos else "."))
+        st.info(
+            f"CUITs leídos: **{len(lista_validos)}** válidos" +
+            (f", {invalidos} ignorados por formato incorrecto." if invalidos else ".")
+        )
 
         resultado_lote = buscar_cuits(padron, lista_validos)
 
         if not resultado_lote.empty:
             st.success(f"✅ {len(resultado_lote)} registros encontrados de {len(lista_validos)} consultados.")
             st.dataframe(resultado_lote[COLS_MOSTRAR], use_container_width=True)
-
             st.download_button(
                 "📥 Descargar Excel",
                 data=generar_excel(resultado_lote[COLS_MOSTRAR]),
