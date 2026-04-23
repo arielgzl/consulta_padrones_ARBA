@@ -3,31 +3,25 @@ import streamlit as st
 import traceback
 
 try:
-    from huggingface_hub import hf_hub_download
+    import dropbox
     from io import BytesIO
 
     st.set_page_config(page_title="Consulta ARBA", page_icon="🔍", layout="centered")
 
     ARCHIVOS = {
-        "Retenciones":  {"filename": "PadronRGSRet042026.TXT"},
-        "Percepciones": {"filename": "PadronRGSPer042026.TXT"},
+        "Retenciones":  "/Padrones/PadronRGSRet042026.TXT",
+        "Percepciones": "/Padrones/PadronRGSPer042026.TXT",
     }
 
     COLUMNS = ["TIPO", "F_CONSULTA", "F_DESDE", "F_HASTA", "CUIT", "A0", "A1", "A2", "ALICUOTA", "A3", "A4"]
     COLS_MOSTRAR = ["CUIT", "ALICUOTA", "F_DESDE", "F_HASTA"]
 
-    HF_REPO = "arielgonzalez/padrones_arba"
-
-    @st.cache_data(show_spinner="Descargando padrón desde Hugging Face...")
+    @st.cache_data(show_spinner="Descargando padrón desde Dropbox...")
     def cargar_padron(nombre: str) -> pd.DataFrame:
-        ruta_local = hf_hub_download(
-            repo_id=HF_REPO,
-            filename=ARCHIVOS[nombre]["filename"],
-            repo_type="dataset",
-            token=st.secrets["HF_TOKEN"],
-        )
+        dbx = dropbox.Dropbox(st.secrets["DROPBOX_TOKEN"])
+        _, response = dbx.files_download(ARCHIVOS[nombre])
         df = pd.read_csv(
-            ruta_local,
+            BytesIO(response.content),
             sep=";",
             names=COLUMNS,
             encoding="latin1",
