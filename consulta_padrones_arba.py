@@ -36,7 +36,7 @@ def cargar_padron(file_id, filename):
 
     columns = ["TIPO", "F_CONSULTA", "F_DESDE", "F_HASTA", "CUIT", "A0", "A1", "A2", "ALICUOTA", "A3", "A4"]
 
-    df = pd.read_csv(filename, sep=";", names=columns, encoding="latin1")
+    df = pd.read_csv(filename, sep=";", encoding="latin1")
 
     # 🔥 CLAVE: normalizar CUIT
     df = df[["CUIT", "ALICUOTA"]]
