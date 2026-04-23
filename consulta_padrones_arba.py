@@ -2,6 +2,15 @@ import pandas as pd
 import streamlit as st
 from huggingface_hub import hf_hub_download
 from io import BytesIO
+import traceback
+
+try:
+    # todo tu código acá adentro
+except Exception as e:
+    st.error(f"Error: {e}")
+    st.code(traceback.format_exc())
+
+
 
 # ─── Configuración ────────────────────────────────────────────────────────────
 st.set_page_config(page_title="Consulta ARBA", page_icon="🔍", layout="centered")
