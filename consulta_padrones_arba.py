@@ -13,7 +13,7 @@ url = f"https://drive.google.com/uc?id={file_id}"
 
 output = "retenciones_ARBA.csv"
 
-gdown.download(url, output, quiet=False, fuzzy=True)
+gdown.download(id=file_id, output=output, quiet=False)
 
 columns = ["TIPO", "F_CONSULTA", "F_DESDE", "F_HASTA", "CUIT", "A0", "A1", "A2", "ALICUOTA", "A3", "A4"]
 
