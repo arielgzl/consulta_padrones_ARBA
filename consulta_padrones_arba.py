@@ -1,97 +1,127 @@
 import pandas as pd
-import gdown
 import streamlit as st
+import requests
 from io import BytesIO
+import os
 
-#RETENCIONES
+# -------------------------------
+# DESCARGA ROBUSTA (SIN GDOWN)
+# -------------------------------
+def download_drive_file(file_id, output):
+    if os.path.exists(output):
+        return  # ya descargado
 
-#drive = #https://drive.google.com/file/d/1He_ve8_nnxtHfUsMcodQby29i1VB1rFz/view?usp=drive_link
+    URL = "https://drive.google.com/uc?export=download"
+    session = requests.Session()
 
-file_id = "1He_ve8_nnxtHfUsMcodQby29i1VB1rFz"
+    response = session.get(URL, params={'id': file_id}, stream=True)
 
-url = f"https://drive.google.com/uc?id={file_id}"
+    # manejar confirmación de Google
+    for key, value in response.cookies.items():
+        if key.startswith('download_warning'):
+            response = session.get(URL, params={'id': file_id, 'confirm': value}, stream=True)
+            break
 
-output = "retenciones_ARBA.csv"
+    with open(output, "wb") as f:
+        for chunk in response.iter_content(32768):
+            if chunk:
+                f.write(chunk)
 
-gdown.download(id=file_id, output=output, quiet=False)
+# -------------------------------
+# CARGA CON CACHE (CLAVE)
+# -------------------------------
+@st.cache_data
+def cargar_padron(file_id, filename):
+    download_drive_file(file_id, filename)
 
-columns = ["TIPO", "F_CONSULTA", "F_DESDE", "F_HASTA", "CUIT", "A0", "A1", "A2", "ALICUOTA", "A3", "A4"]
+    columns = ["TIPO", "F_CONSULTA", "F_DESDE", "F_HASTA", "CUIT", "A0", "A1", "A2", "ALICUOTA", "A3", "A4"]
 
-padron_retenciones = pd.read_csv("retenciones_ARBA.csv", sep=";", names = columns, encoding="latin1")
-padron_retenciones.head()
+    df = pd.read_csv(filename, sep=";", names=columns, encoding="latin1")
 
-#PERCEPCIONES
+    # optimización clave
+    df = df[["CUIT", "ALICUOTA"]]
+    df["CUIT"] = df["CUIT"].astype(str)
 
-#drive = #https://drive.google.com/file/d/1ivL1AMT4q79uWTVM5OBOrCMq-OVowQhj/view?usp=drive_link
+    return df
 
-file_id = "1ivL1AMT4q79uWTVM5OBOrCMq-OVowQhj"
+# -------------------------------
+# CARGA PADRONES (UNA VEZ)
+# -------------------------------
+padron_retenciones = cargar_padron(
+    "1He_ve8_nnxtHfUsMcodQby29i1VB1rFz",
+    "retenciones.csv"
+)
 
-url = f"https://drive.google.com/uc?id={file_id}"
+padron_percepciones = cargar_padron(
+    "1ivL1AMT4q79uWTVM5OBOrCMq-OVowQhj",
+    "percepciones.csv"
+)
 
-output = "percepciones_ARBA.csv"
-
-gdown.download(url, output, quiet=False, fuzzy=True)
-
-padron_percepciones = pd.read_csv("percepciones_ARBA.csv", sep=";", names = columns, encoding="latin1")
-padron_percepciones.head()
-
-# Función para filtrar por CUIT
+# -------------------------------
+# FUNCIONES
+# -------------------------------
 def buscar_cuits(padron, lista_cuits):
+    lista_cuits = [str(c) for c in lista_cuits]
     return padron[padron['CUIT'].isin(lista_cuits)]
 
-# Función para generar archivo Excel
 def generar_excel(df):
     output = BytesIO()
     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Resultado')
+        df.to_excel(writer, index=False)
     output.seek(0)
     return output
 
-# Simulación de los dos padrones cargados como DataFrames
-# Asegurate de tener esto bien cargado antes en tu código real
-# padron_retenciones = pd.read_csv(...)
-# padron_percepciones = pd.read_csv(...)
-
-# Interfaz Streamlit
+# -------------------------------
+# UI
+# -------------------------------
 st.title("Consulta de Alícuotas por CUIT ARBA")
 
-# Elegir base de datos
-tipo_padron = st.selectbox("Seleccioná el padrón a consultar:", ["Retenciones", "Percepciones"])
+tipo_padron = st.selectbox(
+    "Seleccioná el padrón:",
+    ["Retenciones", "Percepciones"]
+)
 
-# Selección del padrón
 padron = padron_retenciones if tipo_padron == "Retenciones" else padron_percepciones
 
-# Método de consulta
-opcion = st.radio("¿Cómo querés consultar?", ["Individual", "Por lote (.txt)"])
+opcion = st.radio("Modo:", ["Individual", "Por lote (.txt)"])
 
+# -------------------------------
+# INDIVIDUAL
+# -------------------------------
 if opcion == "Individual":
-    cuit = st.text_input("Ingresá el CUIT (sin guiones ni puntos):")
+    cuit = st.text_input("CUIT (11 dígitos):")
 
     if st.button("Consultar"):
         if cuit.isnumeric() and len(cuit) == 11:
-            resultado = buscar_cuits(padron, [int(cuit)])
+            resultado = buscar_cuits(padron, [cuit])
+
             if not resultado.empty:
-                st.success("Resultado:")
-                st.dataframe(resultado[["CUIT", "ALICUOTA"]])
+                st.dataframe(resultado)
             else:
-                st.warning("CUIT no encontrado en el padrón.")
+                st.warning("No encontrado")
         else:
-            st.error("El CUIT debe tener 11 dígitos numéricos.")
+            st.error("CUIT inválido")
 
+# -------------------------------
+# LOTE
+# -------------------------------
 else:
-    archivo = st.file_uploader("Subí el archivo .txt con los CUITs (uno por línea)", type=["txt"])
+    archivo = st.file_uploader("Archivo .txt", type=["txt"])
 
-    if archivo is not None:
+    if archivo:
         contenido = archivo.read().decode("utf-8")
-        lista_cuits = [int(line.strip()) for line in contenido.strip().splitlines() if line.strip().isdigit()]
+        lista_cuits = [line.strip() for line in contenido.splitlines() if line.strip().isdigit()]
 
-        resultado_lote = buscar_cuits(padron, lista_cuits)
+        resultado = buscar_cuits(padron, lista_cuits)
 
-        if not resultado_lote.empty:
-            st.success("Resultados encontrados:")
-            st.dataframe(resultado_lote[["CUIT", "ALICUOTA"]])
+        if not resultado.empty:
+            st.dataframe(resultado)
 
-            excel_data = generar_excel(resultado_lote[["CUIT", "ALICUOTA"]])
-            st.download_button("📥 Descargar resultados en Excel", data=excel_data, file_name="resultado.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            excel = generar_excel(resultado)
+            st.download_button(
+                "Descargar Excel",
+                data=excel,
+                file_name="resultado.xlsx"
+            )
         else:
-            st.warning("Ningún CUIT del archivo fue encontrado en el padrón.")
+            st.warning("Sin resultados")
