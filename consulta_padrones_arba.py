@@ -5,18 +5,18 @@ from io import BytesIO
 import os
 
 # -------------------------------
-# DESCARGA ROBUSTA (SIN GDOWN)
+# DESCARGA ROBUSTA DESDE DRIVE
 # -------------------------------
 def download_drive_file(file_id, output):
     if os.path.exists(output):
-        return  # ya descargado
+        return
 
     URL = "https://drive.google.com/uc?export=download"
     session = requests.Session()
 
     response = session.get(URL, params={'id': file_id}, stream=True)
 
-    # manejar confirmación de Google
+    # manejar confirmación de Google (archivos grandes)
     for key, value in response.cookies.items():
         if key.startswith('download_warning'):
             response = session.get(URL, params={'id': file_id, 'confirm': value}, stream=True)
@@ -28,7 +28,7 @@ def download_drive_file(file_id, output):
                 f.write(chunk)
 
 # -------------------------------
-# CARGA CON CACHE (CLAVE)
+# CARGA CON CACHE
 # -------------------------------
 @st.cache_data
 def cargar_padron(file_id, filename):
@@ -38,14 +38,14 @@ def cargar_padron(file_id, filename):
 
     df = pd.read_csv(filename, sep=";", names=columns, encoding="latin1")
 
-    # optimización clave
+    # 🔥 CLAVE: normalizar CUIT
     df = df[["CUIT", "ALICUOTA"]]
-    df["CUIT"] = df["CUIT"].astype(str)
+    df["CUIT"] = df["CUIT"].astype(str).str.strip()
 
     return df
 
 # -------------------------------
-# CARGA PADRONES (UNA VEZ)
+# CARGA PADRONES
 # -------------------------------
 padron_retenciones = cargar_padron(
     "1He_ve8_nnxtHfUsMcodQby29i1VB1rFz",
@@ -61,7 +61,7 @@ padron_percepciones = cargar_padron(
 # FUNCIONES
 # -------------------------------
 def buscar_cuits(padron, lista_cuits):
-    lista_cuits = [str(c) for c in lista_cuits]
+    lista_cuits = [str(c).strip() for c in lista_cuits]
     return padron[padron['CUIT'].isin(lista_cuits)]
 
 def generar_excel(df):
@@ -83,22 +83,23 @@ tipo_padron = st.selectbox(
 
 padron = padron_retenciones if tipo_padron == "Retenciones" else padron_percepciones
 
-opcion = st.radio("Modo:", ["Individual", "Por lote (.txt)"])
+opcion = st.radio("Modo de consulta:", ["Individual", "Por lote (.txt)"])
 
 # -------------------------------
 # INDIVIDUAL
 # -------------------------------
 if opcion == "Individual":
-    cuit = st.text_input("CUIT (11 dígitos):")
+    cuit = st.text_input("CUIT (11 dígitos)").strip()
 
     if st.button("Consultar"):
-        if cuit.isnumeric() and len(cuit) == 11:
+        if cuit.isdigit() and len(cuit) == 11:
             resultado = buscar_cuits(padron, [cuit])
 
             if not resultado.empty:
+                st.success("Resultado:")
                 st.dataframe(resultado)
             else:
-                st.warning("No encontrado")
+                st.warning("CUIT no encontrado")
         else:
             st.error("CUIT inválido")
 
@@ -106,22 +107,28 @@ if opcion == "Individual":
 # LOTE
 # -------------------------------
 else:
-    archivo = st.file_uploader("Archivo .txt", type=["txt"])
+    archivo = st.file_uploader("Subí archivo .txt (un CUIT por línea)", type=["txt"])
 
     if archivo:
         contenido = archivo.read().decode("utf-8")
-        lista_cuits = [line.strip() for line in contenido.splitlines() if line.strip().isdigit()]
+
+        lista_cuits = [
+            line.strip()
+            for line in contenido.splitlines()
+            if line.strip().isdigit()
+        ]
 
         resultado = buscar_cuits(padron, lista_cuits)
 
         if not resultado.empty:
+            st.success("Resultados:")
             st.dataframe(resultado)
 
             excel = generar_excel(resultado)
             st.download_button(
-                "Descargar Excel",
+                "📥 Descargar Excel",
                 data=excel,
                 file_name="resultado.xlsx"
             )
         else:
-            st.warning("Sin resultados")
+            st.warning("Ningún CUIT encontrado")
