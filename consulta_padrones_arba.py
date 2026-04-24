@@ -82,4 +82,44 @@ try:
 
         if st.button("Consultar", type="primary"):
             cuit_norm = normalizar_cuit(cuit_input)
-            if len(cuit_norm) == 11 and cuit
+            if len(cuit_norm) == 11 and cuit_norm.isnumeric():
+                resultado = buscar_cuits(padron, [cuit_norm])
+                if not resultado.empty:
+                    st.success(f"✅ CUIT encontrado — alícuota: **{resultado['ALICUOTA'].iloc[0]}**")
+                    st.dataframe(resultado[COLS_MOSTRAR], use_container_width=True)
+                else:
+                    st.warning("⚠️ CUIT no encontrado en el padrón.")
+            else:
+                st.error("El CUIT debe tener 11 dígitos numéricos.")
+
+    else:
+        archivo = st.file_uploader("Archivo .txt con CUITs (uno por línea):", type=["txt"])
+
+        if archivo:
+            contenido = archivo.read().decode("utf-8")
+            lista_raw = [normalizar_cuit(l) for l in contenido.splitlines() if l.strip()]
+            lista_validos = [c for c in lista_raw if len(c) == 11 and c.isnumeric()]
+            invalidos = len(lista_raw) - len(lista_validos)
+
+            st.info(
+                f"CUITs leídos: **{len(lista_validos)}** válidos" +
+                (f", {invalidos} ignorados por formato incorrecto." if invalidos else ".")
+            )
+
+            resultado_lote = buscar_cuits(padron, lista_validos)
+
+            if not resultado_lote.empty:
+                st.success(f"✅ {len(resultado_lote)} registros encontrados de {len(lista_validos)} consultados.")
+                st.dataframe(resultado_lote[COLS_MOSTRAR], use_container_width=True)
+                st.download_button(
+                    "📥 Descargar Excel",
+                    data=generar_excel(resultado_lote[COLS_MOSTRAR]),
+                    file_name=f"resultado_{tipo_padron.lower()}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                )
+            else:
+                st.warning("⚠️ Ningún CUIT fue encontrado en el padrón.")
+
+except Exception as e:
+    st.error(f"Error: {e}")
+    st.code(traceback.format_exc())
